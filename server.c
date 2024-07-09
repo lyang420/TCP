@@ -21,12 +21,12 @@ int main() {
 
 	r = getaddrinfo(0, "8080", &hints, &server);
 	if (r != 0) {
-		perror("Failed to configure host address");
+		perror("Server failed to configure host address");
 		exit(1);
 	}
 	puts("done.");
 
-	printf("Configuring socket... ");
+	printf("Configuring server socket... ");
 	sockfd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
 	if (sockfd == -1) {
 		perror("Failed to create server socket");
@@ -41,7 +41,7 @@ int main() {
 		exit(1);
 	}
 
-	printf("Binding socket... ");
+	printf("Binding server socket... ");
 	r = bind(sockfd, server->ai_addr, server->ai_addrlen);
 	if (r == -1) {
 		perror("Failed to bind server socket");
