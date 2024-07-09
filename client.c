@@ -1,3 +1,6 @@
+/* `client.c` is a basic TCP client following IPv4 written in C that sends a
+message to `server.c`. */
+
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +15,8 @@ int main() {
 	const int buf_size = 1024;
 	char buf[buf_size];
 
+	/* Configure localhost address. */
+
 	memset_s(&hints, sizeof(hints), 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
@@ -22,11 +27,16 @@ int main() {
 		exit(1);
 	}
 
+	/* Create socket. */
+
 	sockfd = socket(host->ai_family, host->ai_socktype, host->ai_protocol);
 	if (sockfd == -1) {
 		perror("Failed to create client socket");
 		exit(1);
 	}
+
+	/* Once socket is configured and connected to host address, client can start
+	interacting with server. */
 
 	r = connect(sockfd, host->ai_addr, host->ai_addrlen);
 	if (r == -1) {
@@ -43,6 +53,8 @@ int main() {
 	r = recv(sockfd, buf, buf_size, 0);
 	buf[r] = '\0';
 	printf("%s\n", buf);
+
+	/* Close file descriptors and open sockets before terminating program. */
 
 	freeaddrinfo(host);
 	close(sockfd);
