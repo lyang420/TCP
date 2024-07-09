@@ -49,7 +49,7 @@ int main() {
 	}
 	puts("done.");
 
-	printf("Listening for incoming requests... ");
+	printf("Listening for incoming requests...\n");
 	r = listen(sockfd, 1);
 	if (r == -1) {
 		perror("Failed listening for incoming requests");
