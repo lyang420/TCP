@@ -68,13 +68,13 @@ int main() {
 	/* After accepting request, process into buffer and send it back. */
 
 	client_len = sizeof(client_address);
-	clientfd = accept(sockfd, &client_address, &client_len);
-	if (clientfd == -1) {
-		perror("server accept() failed");
-		exit(1);
-	}
 
 	for (;;) {
+		clientfd = accept(sockfd, &client_address, &client_len);
+		if (clientfd == -1) {
+			perror("server accept() failed");
+			exit(1);
+		}
 		r = recv(clientfd, input, size, 0);
 		if (r > 0) {
 			input[r] = '\0';
