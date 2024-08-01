@@ -10,20 +10,16 @@ message to `server.c`. */
 
 int main() {
 	struct addrinfo hints, *host;
-	int r, sockfd;
-	const char *msg = "test\n";
+	int r, sockfd, i;
 	const int buf_size = 1024;
 	char buf[buf_size];
-
-	/* Configure localhost address. */
 
 	memset_s(&hints, sizeof(hints), 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
-
 	r = getaddrinfo(0, "8080", &hints, &host);
 	if (r != 0) {
-		perror("Client failed to configure host address");
+		perror("client getaddrinfo() failed");
 		exit(1);
 	}
 
@@ -31,7 +27,7 @@ int main() {
 
 	sockfd = socket(host->ai_family, host->ai_socktype, host->ai_protocol);
 	if (sockfd == -1) {
-		perror("Failed to create client socket");
+		perror("client socket() failed");
 		exit(1);
 	}
 
@@ -40,25 +36,39 @@ int main() {
 
 	r = connect(sockfd, host->ai_addr, host->ai_addrlen);
 	if (r == -1) {
-		perror("Failed to connect client socket");
+		perror("client connect() failed");
 		exit(1);
 	}
 
-	r = send(sockfd, msg, strlen(msg), 0);
-	if (r == -1) {
-		perror("Failed to send data to server");
-		exit(1);
+	for (;;) {
+		printf(" > ");
+		fgets(buf, buf_size, stdin);
+		if (buf[0] == '\n') {
+			break;
+		}
+		for (i = 0; i < buf_size; i++) {
+			if (buf[i] == '\n') {
+				buf[i] = '\0';
+				break;
+			}
+		}
+		if (strcmp(buf, "exit") == 0 || strcmp(buf, "quit") == 0) {
+			break;
+		}
+		r = send(sockfd, buf, strlen(buf), 0);
+		if (r == -1) {
+			perror("client send() failed");
+			exit(1);
+		}
+		r = recv(sockfd, buf, buf_size, 0);
+		buf[r] = '\0';
+		printf("%s\n", buf);
 	}
-
-	r = recv(sockfd, buf, buf_size, 0);
-	buf[r] = '\0';
-	printf("%s\n", buf);
 
 	/* Close file descriptors and open sockets before terminating program. */
 
 	freeaddrinfo(host);
 	close(sockfd);
-	puts("Finished.");
 
 	return 0;
 }
