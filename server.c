@@ -14,9 +14,8 @@ int main() {
 	struct sockaddr client_address;
 	socklen_t client_len;
 	int r, sockfd, clientfd, option;
-	const int buf_size = 1024;
-	char buf[buf_size];
-	const char *greeting = "Hey, you sent me: ";
+	const int size = 1024;
+	char input[size], output[size];
 
 	/* Configure host address, which is the localhost for now. Use `memset_s` and
 	not `memset`. */
@@ -25,10 +24,9 @@ int main() {
 	hints.ai_family = AF_INET6;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
-
 	r = getaddrinfo(0, "8080", &hints, &server);
 	if (r != 0) {
-		perror("Server failed to configure host address");
+		perror("server getaddrinfo() failed");
 		exit(1);
 	}
 
@@ -36,7 +34,7 @@ int main() {
 
 	sockfd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
 	if (sockfd == -1) {
-		perror("Failed to create server socket");
+		perror("server socket() failed");
 		exit(1);
 	}
 
@@ -47,7 +45,7 @@ int main() {
 	option = 0;
 	r = setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &option, sizeof(option));
 	if (r == -1) {
-		perror("Failed to activate dual stack configuration");
+		perror("server setsockopt() failed");
 		exit(1);
 	}
 
@@ -56,13 +54,14 @@ int main() {
 
 	r = bind(sockfd, server->ai_addr, server->ai_addrlen);
 	if (r == -1) {
-		perror("Failed to bind server socket");
+		perror("server bind() failed");
 		exit(1);
 	}
 
+	printf("Server is listening...\n");
 	r = listen(sockfd, 1);
 	if (r == -1) {
-		perror("Failed listening for incoming requests");
+		perror("server listen() failed");
 		exit(1);
 	}
 
@@ -71,15 +70,24 @@ int main() {
 	client_len = sizeof(client_address);
 	clientfd = accept(sockfd, &client_address, &client_len);
 	if (clientfd == -1) {
-		perror("Failed to accept client socket");
+		perror("server accept() failed");
 		exit(1);
 	}
 
-	r = recv(clientfd, buf, buf_size, 0);
-	if (r > 0) {
-		buf[r] = '\0';
-		r = send(clientfd, greeting, strlen(greeting), 0);
-		r = send(clientfd, buf, strlen(buf), 0);
+	for (;;) {
+		r = recv(clientfd, input, size, 0);
+		if (r > 0) {
+			input[r] = '\0';
+			strcpy(output, " $ ");
+			strcat(output, input);
+			r = send(clientfd, output, strlen(output), 0);
+			if (r < 1) {
+				perror("server send() failed");
+				exit(1);
+			}
+		} else {
+			break;
+		}
 	}
 
 	/* Close file descriptors and open sockets before terminating program. */
