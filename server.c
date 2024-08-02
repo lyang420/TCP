@@ -69,6 +69,15 @@ int main() {
 
 	client_len = sizeof(client_address);
 
+	/* Code to process client request lives in infinite loop to guarantee server
+	will remain up (for as long as it can) waiting to accept incoming data.
+	However, use of `client_address` in this way limits the number of clients to
+	only 1. 
+
+	TODO: Implement array to store IP addresses enabling handling multiple
+	clients in a queue. See also server/client code in C++, Ruby, Rust, and Go.
+	*/
+
 	for (;;) {
 		clientfd = accept(sockfd, &client_address, &client_len);
 		if (clientfd == -1) {
