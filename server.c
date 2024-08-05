@@ -7,15 +7,25 @@ greeting message acknowledging receipt. */
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 
+#define TRUE 1
+#define FALSE 0
+
 int main() {
+	const char *port = "8080";
+	const int clientname_size = 32;
+	char clientname[clientname_size];
+	char buffer[BUFSIZ], sendstr[BUFSIZ];
+	const int backlog = 10;
+	char connection[backlog][clientname_size];
+	socklen_t address_len = sizeof(struct sockaddr);
 	struct addrinfo hints, *server;
-	struct sockaddr client_address;
-	socklen_t client_len;
-	int r, sockfd, clientfd, option;
-	const int size = 1024;
-	char input[size], output[size];
+	struct sockaddr address;
+	int r, max_connect, fd, i, done;
+	fd_set main_fd, read_fd;
+	int serverfd, clientfd;
 
 	/* Configure host address, which is the localhost for now. Use `memset_s` and
 	not `memset`. */
@@ -24,7 +34,7 @@ int main() {
 	hints.ai_family = AF_INET6;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
-	r = getaddrinfo(0, "8080", &hints, &server);
+	r = getaddrinfo(0, port, &hints, &server);
 	if (r != 0) {
 		perror("server getaddrinfo() failed");
 		exit(1);
@@ -32,78 +42,101 @@ int main() {
 
 	/* Create socket. */
 
-	sockfd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
-	if (sockfd == -1) {
+	serverfd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
+	if (serverfd == -1) {
 		perror("server socket() failed");
-		exit(1);
-	}
-
-	/* Activate dual stack configuration (notice setting of family to `AF_INET6`
-	and not `AF_INET` at line 25 above and usage of `AI_PASSIVE` flag at line
-	27). I am told this may not be supported on all operating systems. */
-
-	option = 0;
-	r = setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &option, sizeof(option));
-	if (r == -1) {
-		perror("server setsockopt() failed");
 		exit(1);
 	}
 
 	/* Once configured, bind server socket to host address and listen for
 	incoming requests on the network. */
 
-	r = bind(sockfd, server->ai_addr, server->ai_addrlen);
+	r = bind(serverfd, server->ai_addr, server->ai_addrlen);
 	if (r == -1) {
 		perror("server bind() failed");
 		exit(1);
 	}
 
 	printf("Server is listening...\n");
-	r = listen(sockfd, 1);
+	r = listen(serverfd, backlog);
 	if (r == -1) {
 		perror("server listen() failed");
 		exit(1);
 	}
 
-	/* After accepting request, process into buffer and send it back. */
+	max_connect = backlog;
+	FD_ZERO(&main_fd);
+	FD_SET(serverfd, &main_fd);
 
-	client_len = sizeof(client_address);
-
-	/* Code to process client request lives in infinite loop to guarantee server
-	will remain up (for as long as it can) waiting to accept incoming data.
-	However, use of `client_address` in this way limits the number of clients to
-	only 1. 
-
-	TODO: Implement array to store IP addresses enabling handling multiple
-	clients in a queue. See also server/client code in C++, Ruby, Rust, and Go.
-	*/
-
-	for (;;) {
-		clientfd = accept(sockfd, &client_address, &client_len);
-		if (clientfd == -1) {
-			perror("server accept() failed");
+	done = FALSE;
+	while (!done) {
+		read_fd = main_fd;
+		r = select(max_connect + 1, &read_fd, NULL, NULL, 0);
+		if (r == -1) {
+			perror("server select() failed");
 			exit(1);
 		}
-		r = recv(clientfd, input, size, 0);
-		if (r > 0) {
-			input[r] = '\0';
-			strcpy(output, " $ ");
-			strcat(output, input);
-			r = send(clientfd, output, strlen(output), 0);
-			if (r < 1) {
-				perror("server send() failed");
-				exit(1);
+		for (i = 1; i <= max_connect; i++) {
+			if (FD_ISSET(fd, &read_fd)) {
+				if (fd == serverfd) {
+					clientfd = accept(serverfd, (struct sockaddr *) &address, &address_len);
+					if (clientfd == -1) {
+						perror("server accept() failed");
+						exit(1);
+					}
+					r = getnameinfo((struct sockaddr *) &address, address_len,
+										 clientname, clientname_size, 0, 0, NI_NUMERICHOST);
+					strcpy(connection[clientfd], clientname);
+					FD_SET(clientfd, &main_fd);
+					strcpy(buffer, " > ");
+					strcat(buffer, connection[clientfd]);
+					strcat(buffer, " connected to the server\n");
+					strcat(buffer, " > Type 'disconnect' to disconnect; 'exit' to stop\n");
+					send(clientfd, buffer, strlen(buffer), 0);
+					for (i = serverfd + 1; i < max_connect; i++) {
+						if (FD_ISSET(i, &main_fd)) {
+							send(i, buffer, strlen(buffer), 0);
+						}
+					}
+					printf("%s", buffer);
+				} else {
+					r = recv(fd, buffer, BUFSIZ, 0);
+					if (r < 1) {
+						FD_CLR(fd, &main_fd);
+						close(fd);
+						strcpy(buffer, " > ");
+						strcat(buffer, connection[fd]);
+						strcat(buffer, " disconnected\n");
+						for (i = serverfd + 1; i < max_connect; i++) {
+							if (FD_ISSET(i, &main_fd)) {
+								send(i, buffer, strlen(buffer), 0);
+							}
+						}
+						printf("%s", buffer);
+					} else {
+						buffer[r] = '\0';
+						if (strcmp(buffer, "'exit\n") == 0) {
+							done = TRUE;
+						} else {
+							strcpy(sendstr, connection[fd]);
+							strcat(sendstr, " > ");
+							strcat(sendstr, buffer);
+							for (i = serverfd + 1; i < max_connect; i++) {
+								if (FD_ISSET(i, &main_fd)) {
+									send(i, sendstr, strlen(sendstr), 0);
+								}
+							}
+							printf("%s", sendstr);
+						}
+					}
+				}
 			}
-		} else {
-			break;
 		}
 	}
 
-	/* Close file descriptors and open sockets before terminating program. */
-
+	puts(" > Shutting down server");
+	close(serverfd);
 	freeaddrinfo(server);
-	close(clientfd);
-	close(sockfd);
 
 	return 0;
 }
