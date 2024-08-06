@@ -71,6 +71,14 @@ int main() {
 		exit(1);
 	}
 
+	/* Functions for the server to accept and receive incoming requests will be
+	placed in a loop that runs until the client specifies otherwise, supporting
+	constant connection. Backlog and list of client file descriptors are kept and
+	checked throughout to support handling multiple different clients. 
+
+	IMPORTANT: Test using MULTIPLE machines on one network, if possible. May
+	fiddle with host address and port number above. */
+
 	max_num_clients = backlog;
 	FD_ZERO(&main_fd);
 	FD_SET(server_fd, &main_fd);
