@@ -1,31 +1,38 @@
-/* `server.c` is a basic TCP server written in C supporting both IPv4 and IPv6
-requests. After receiving data from a client, the server sends it back with a
-greeting message acknowledging receipt. */
+/* `server.c` is a TCP server written in C supporting IPv4 requests from
+multiple clients (though not concurrently). After receiving data from a client,
+the server announces to other connections on the local network that a new
+participant has joined, and sends back messages acknowledging receipt. The
+server may terminate connection from a client provided they enter the
+appropriate input. */
 
-#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/select.h>
+#include <netdb.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 
 #define TRUE 1
 #define FALSE 0
 
 int main() {
+	/* host address configuration */
 	const char *port = "8080";
+	struct addrinfo hints, *server;
+	/* server and client socket configuration */
+	int server_fd, client_fd;
+	/* client info configuration */
 	const int clientname_size = 32;
 	char clientname[clientname_size];
 	char buffer[BUFSIZ], sendstr[BUFSIZ];
+	/* support for multiple clients */
 	const int backlog = 10;
 	char connection[backlog][clientname_size];
 	socklen_t address_len = sizeof(struct sockaddr);
-	struct addrinfo hints, *server;
 	struct sockaddr address;
-	int r, max_connect, fd, i, done;
+	int r, max_num_clients, request_fd, done, i;
 	fd_set main_fd, read_fd;
-	int serverfd, clientfd;
 
 	/* Configure host address, which is the localhost for now. Use `memset_s` and
 	not `memset`. */
@@ -42,8 +49,8 @@ int main() {
 
 	/* Create socket. */
 
-	serverfd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
-	if (serverfd == -1) {
+	server_fd = socket(server->ai_family, server->ai_socktype, server->ai_protocol);
+	if (server_fd == -1) {
 		perror("server socket() failed");
 		exit(1);
 	}
@@ -51,63 +58,63 @@ int main() {
 	/* Once configured, bind server socket to host address and listen for
 	incoming requests on the network. */
 
-	r = bind(serverfd, server->ai_addr, server->ai_addrlen);
+	r = bind(server_fd, server->ai_addr, server->ai_addrlen);
 	if (r == -1) {
 		perror("server bind() failed");
 		exit(1);
 	}
 
 	printf("Server is listening...\n");
-	r = listen(serverfd, backlog);
+	r = listen(server_fd, backlog);
 	if (r == -1) {
 		perror("server listen() failed");
 		exit(1);
 	}
 
-	max_connect = backlog;
+	max_num_clients = backlog;
 	FD_ZERO(&main_fd);
-	FD_SET(serverfd, &main_fd);
+	FD_SET(server_fd, &main_fd);
 
 	done = FALSE;
 	while (!done) {
 		read_fd = main_fd;
-		r = select(max_connect + 1, &read_fd, NULL, NULL, 0);
+		r = select(max_num_clients + 1, &read_fd, NULL, NULL, 0);
 		if (r == -1) {
 			perror("server select() failed");
 			exit(1);
 		}
-		for (i = 1; i <= max_connect; i++) {
-			if (FD_ISSET(fd, &read_fd)) {
-				if (fd == serverfd) {
-					clientfd = accept(serverfd, (struct sockaddr *) &address, &address_len);
-					if (clientfd == -1) {
+		for (i = 1; i <= max_num_clients; i++) {
+			if (FD_ISSET(request_fd, &read_fd)) {
+				if (request_fd == server_fd) {
+					client_fd = accept(server_fd, (struct sockaddr *) &address, &address_len);
+					if (client_fd == -1) {
 						perror("server accept() failed");
 						exit(1);
 					}
 					r = getnameinfo((struct sockaddr *) &address, address_len,
 										 clientname, clientname_size, 0, 0, NI_NUMERICHOST);
-					strcpy(connection[clientfd], clientname);
-					FD_SET(clientfd, &main_fd);
+					strcpy(connection[client_fd], clientname);
+					FD_SET(client_fd, &main_fd);
 					strcpy(buffer, " > ");
-					strcat(buffer, connection[clientfd]);
+					strcat(buffer, connection[client_fd]);
 					strcat(buffer, " connected to the server\n");
 					strcat(buffer, " > Type 'disconnect' to disconnect; 'exit' to stop\n");
-					send(clientfd, buffer, strlen(buffer), 0);
-					for (i = serverfd + 1; i < max_connect; i++) {
+					send(client_fd, buffer, strlen(buffer), 0);
+					for (i = server_fd + 1; i < max_num_clients; i++) {
 						if (FD_ISSET(i, &main_fd)) {
 							send(i, buffer, strlen(buffer), 0);
 						}
 					}
 					printf("%s", buffer);
 				} else {
-					r = recv(fd, buffer, BUFSIZ, 0);
+					r = recv(request_fd, buffer, BUFSIZ, 0);
 					if (r < 1) {
-						FD_CLR(fd, &main_fd);
-						close(fd);
+						FD_CLR(request_fd, &main_fd);
+						close(request_fd);
 						strcpy(buffer, " > ");
-						strcat(buffer, connection[fd]);
+						strcat(buffer, connection[request_fd]);
 						strcat(buffer, " disconnected\n");
-						for (i = serverfd + 1; i < max_connect; i++) {
+						for (i = server_fd + 1; i < max_num_clients; i++) {
 							if (FD_ISSET(i, &main_fd)) {
 								send(i, buffer, strlen(buffer), 0);
 							}
@@ -118,10 +125,10 @@ int main() {
 						if (strcmp(buffer, "'exit\n") == 0) {
 							done = TRUE;
 						} else {
-							strcpy(sendstr, connection[fd]);
+							strcpy(sendstr, connection[request_fd]);
 							strcat(sendstr, " > ");
 							strcat(sendstr, buffer);
-							for (i = serverfd + 1; i < max_connect; i++) {
+							for (i = server_fd + 1; i < max_num_clients; i++) {
 								if (FD_ISSET(i, &main_fd)) {
 									send(i, sendstr, strlen(sendstr), 0);
 								}
@@ -135,7 +142,7 @@ int main() {
 	}
 
 	puts(" > Shutting down server");
-	close(serverfd);
+	close(server_fd);
 	freeaddrinfo(server);
 
 	return 0;
