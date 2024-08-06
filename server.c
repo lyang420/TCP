@@ -38,7 +38,7 @@ int main() {
 	not `memset`. */
 
 	memset_s(&hints, sizeof(hints), 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_INET6;
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	r = getaddrinfo(0, port, &hints, &server);
