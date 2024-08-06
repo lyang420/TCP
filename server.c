@@ -149,6 +149,10 @@ int main() {
 		}
 	}
 
+	/* Close remaining open file descriptors and free address information before
+	terminating to avoid leaving connections open. Type `ps` in command line and
+	check active PIDs. */
+
 	puts(" > Shutting down server");
 	close(server_fd);
 	freeaddrinfo(server);
