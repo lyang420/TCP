@@ -1,14 +1,18 @@
 /* `client.c` is a basic TCP client following IPv4 written in C that sends a
 message to `server.c`. */
 
-#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <netdb.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 
-int main() {
+#define TRUE 1
+#define FALSE 0
+
+int main(int argc, char *argv[]) {
 	struct addrinfo hints, *host;
 	int r, sockfd, i;
 	const int buf_size = 1024;
