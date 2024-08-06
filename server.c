@@ -31,7 +31,7 @@ int main() {
 	char connection[backlog][clientname_size];
 	socklen_t address_len = sizeof(struct sockaddr);
 	struct sockaddr address;
-	int r, max_num_clients, request_fd, done, i;
+	int r, max_num_clients, request_fd = 0, done, i;
 	fd_set main_fd, read_fd;
 
 	/* Configure host address, which is the localhost for now. Use `memset_s` and
